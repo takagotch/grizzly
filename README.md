@@ -109,11 +109,75 @@ public class NonBlockingHttpHandlerSample {
           HttpContent.Builder contentBuilder = request.httpContentBuilder();
           Buffer b = Buffers.wrap(mm, CONTENT[i]);
           contentBuilder.content(b);
-          
-          
+          HttpContent content = contentBuilder.build();
+          System.out.printf("(Client writing: %s)\n", b.toStringContent());
+          ctx.write(content);
+          try {
+            Thread.sleep(2000);
+          } catch (InterruptedException e) {
+            e.printStackTrace();
+          }
         }
+        
+        ctx.write(request.httpTrailerBuilder().build());
+        
+        System.out.println("\n");
+        
+        return ctx.getStopAction();
+        
       }
       
+      @Override
+      public NextAction handleRead(FilterChainContext ctx) throws IOException {
+        
+        HttpContent c = ctx.getMessage();
+        Buffer b = c.getContent();
+        if (b.hasRemaining()) {
+          sb.append(b.toStringContent());
+        }
+        
+        if (c.isLast()) {
+          future.result(sb.toString());
+        }
+        return ctx.getStopAction();
+      }
+      
+      private HttpRequstPacket createRequest() {
+        HttpRequestPacket.Builder builder = HttpRequestPacket.builder();
+        builder.method("POST");
+        builder.protocol("HTTP/1.1");
+        builder.uri("/echo");
+        builder.chunked(true);
+        HttpRequestPacket packet = builder.build();
+        packet.addHeader(Header.Host, HOST_HEADER_VALUE);
+        return packet;
+        
+      }
+    }
+    
+    private static class NonBlockingEchoHandler extends HttpHandler {
+      
+      @Override
+      public void service(final Request request,
+          final Response response) throws Exception {
+        
+        final char[] buf = new char[128];
+        final NIOReader in = request.getNIOReader();
+        final NIOWriter out = response.getNIOWriter();
+        
+        response.suspend();
+        
+        in.notifyAvailable(new ReadHandler() {
+          
+          @Override
+          public void onDataAvailable() throws Exception {
+            System.out.printf("[onDataAvailable] echoing %d bytes\n", in.readyData());
+            echoAvailableData(in, out, buf);
+            in.notifyAvailabe(this);
+          }
+        });
+        
+          }
     }
   }
 }
