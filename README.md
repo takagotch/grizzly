@@ -175,9 +175,44 @@ public class NonBlockingHttpHandlerSample {
             echoAvailableData(in, out, buf);
             in.notifyAvailabe(this);
           }
-        });
-        
+          
+          @Override
+          public void onError(Throwable t) {
+            System.out.println("[onError]" + t);
+            response.resume();
           }
+          
+          @Override
+          public void onError(Throwable t) {
+            System.out.println("[onError]" + t);
+            response.resume();
+          }
+          
+          @Override
+          public void onAllDataRead() throws Exceptoin {
+            System.out.printf("[onAllDataRead] length: %d\n", in.readyData());
+            try {
+              echoAvailableData(in, out, buf);
+            } finally {
+              try {
+                in.close();
+              } finally {
+              }
+              
+              response.resume();
+            }
+          }
+        });
+      }
+      
+      private void echoAvailableData(NIOReader in, NIOWriter out, char[] buf)
+          throws IOException {
+        
+        while(in.isReady()) {
+          int len = in.read(buf);
+          out.write(buf, 0, len);
+        }
+      }
     }
   }
 }
